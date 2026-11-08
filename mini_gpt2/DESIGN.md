@@ -1,97 +1,97 @@
-# Mini GPT-2 Smoke Test Design
+# Mini GPT-2 冒烟测试设计
 
-Date: 2026-08-15
+日期：2026-08-15
 
-## Goal
+## 目标
 
-Add a self-contained, small-scale GPT-2 training path under `mini_gpt2/` that verifies the complete local training workflow in roughly 2–5 minutes. Existing project files remain unchanged.
+在 `mini_gpt2/` 下新增一条独立的小规模 GPT-2 训练路径，用于在约 2–5 分钟内验证完整的本地训练流程。现有项目文件保持不变。
 
-This is an engineering smoke test, not a statistical reproduction of OpenAI GPT-2 124M. Success means that GPT-2-style training, evaluation, checkpointing, checkpoint reload, and autoregressive generation all work locally.
+这是工程冒烟测试，而不是对 OpenAI GPT-2 124M 的统计性复现。成功意味着 GPT-2 风格的训练、评估、检查点保存与重新加载，以及自回归生成均可在本地正常运行。
 
-## Files and boundaries
+## 文件与边界
 
-All new implementation and generated artifacts stay under `mini_gpt2/`:
+所有新增实现和生成产物都放在 `mini_gpt2/` 下：
 
-- `mini_gpt2/train.py`: model, data loader, training loop, evaluation, checkpoint reload check, and generation.
-- `mini_gpt2/README.md`: exact commands, expected output, and interpretation.
-- `mini_gpt2/.gitignore`: ignores the generated `out/` directory.
-- `mini_gpt2/out/model.pt`: generated checkpoint; not committed.
+- `mini_gpt2/train.py`：模型、数据加载器、训练循环、评估、检查点重新加载校验和文本生成。
+- `mini_gpt2/README.md`：准确的运行命令、预期输出和结果解读。
+- `mini_gpt2/.gitignore`：忽略生成的 `out/` 目录。
+- `mini_gpt2/out/model.pt`：生成的检查点，不提交到版本库。
 
-The script reads the existing repository-level `input.txt` without modifying or copying it. No existing source or configuration file will be edited.
+脚本读取仓库根目录中已有的 `input.txt`，但不会修改或复制它。不会编辑任何现有源码或配置文件。
 
-## Model
+## 模型
 
-The model retains the defining GPT-2 architecture:
+模型保留 GPT-2 的核心架构特征：
 
-- decoder-only Transformer;
-- learned token and positional embeddings;
-- pre-layer-normalized residual blocks;
-- causal multi-head self-attention;
-- GELU MLP with 4x expansion;
-- tied token-embedding and language-model-head weights;
-- GPT-2 tokenizer and padded vocabulary size of 50,304.
+- 仅解码器 Transformer；
+- 可学习的 token 嵌入和位置嵌入；
+- 采用前置层归一化的残差块；
+- 因果多头自注意力；
+- 具有 4 倍扩展维度的 GELU MLP；
+- token 嵌入与语言模型输出头共享权重；
+- GPT-2 分词器，以及填充后的 50,304 词表大小。
 
-Smoke-test defaults:
+冒烟测试的默认参数：
 
-- 2 layers;
-- 2 attention heads;
-- embedding width 128;
-- context length 64;
-- batch size 4;
-- 100 optimizer steps.
+- 2 层；
+- 2 个注意力头；
+- 嵌入宽度 128；
+- 上下文长度 64；
+- batch size 为 4；
+- 100 个优化步骤。
 
-This is approximately 7 million parameters. CLI flags may override steps, batch size, sequence length, learning rate, and device without editing the file.
+模型约有 700 万个参数。通过 CLI 参数可以覆盖训练步数、batch size、序列长度、学习率和设备，无需编辑文件。
 
-## Data flow
+## 数据流
 
-`input.txt` is encoded with `tiktoken`'s GPT-2 encoding. The token stream is split deterministically into 90% training and 10% validation data. Each batch samples contiguous next-token prediction windows using a seeded PyTorch generator.
+使用 `tiktoken` 的 GPT-2 编码对 `input.txt` 进行分词。token 流以确定性方式划分为 90% 的训练数据和 10% 的验证数据。每个 batch 使用带固定种子的 PyTorch 随机数生成器，采样连续的下一 token 预测窗口。
 
-The script resolves `input.txt` relative to the repository, so it works when launched either from the repository root or from `mini_gpt2/`.
+脚本基于仓库位置解析 `input.txt`，因此从仓库根目录或 `mini_gpt2/` 目录启动均可正常运行。
 
-## Runtime behavior
+## 运行时行为
 
-Device selection order is CUDA, MPS, then CPU when `--device auto` is used. CUDA may use bfloat16 autocast when supported; MPS and CPU use float32 to avoid backend-specific autocast issues.
+使用 `--device auto` 时，设备选择顺序为 CUDA、MPS、CPU。CUDA 在支持时可以使用 bfloat16 自动混合精度；MPS 和 CPU 使用 float32，以避免特定后端的自动混合精度问题。
 
-The run performs these stages:
+一次运行包含以下阶段：
 
-1. Print environment, device, model configuration, parameter count, and token counts.
-2. Evaluate deterministic initial train and validation losses.
-3. Train for the configured number of steps and periodically print loss, elapsed time, and token throughput.
-4. Evaluate final train and validation losses.
-5. Save `mini_gpt2/out/model.pt` with model weights, configuration, optimizer step, losses, and seed.
-6. Load the checkpoint into a fresh model and compare logits on a fixed validation batch.
-7. Generate a short sample from a fixed prompt and seed.
-8. Print a final PASS/FAIL summary and return a nonzero exit status on failure.
+1. 输出环境、设备、模型配置、参数量和 token 数量。
+2. 以确定性方式评估初始训练损失和验证损失。
+3. 按配置的步数训练，并定期输出损失、耗时和 token 吞吐率。
+4. 评估最终训练损失和验证损失。
+5. 将模型权重、配置、优化步骤、损失和随机种子保存到 `mini_gpt2/out/model.pt`。
+6. 将检查点加载到一个新模型中，并在固定验证 batch 上比较 logits。
+7. 使用固定提示词和随机种子生成一小段文本。
+8. 输出最终的 PASS/FAIL 汇总；失败时返回非零退出状态。
 
-## Validation criteria
+## 验收标准
 
-The default smoke test passes only when all of the following hold:
+默认冒烟测试只有在以下条件全部满足时才算通过：
 
-- initial and final losses are finite;
-- final fixed-probe training loss is lower than initial fixed-probe training loss;
-- final validation loss is lower than initial validation loss;
-- checkpoint reload logits match the pre-save logits within a maximum absolute difference of `1e-5`;
-- generated token IDs remain in vocabulary range and generation reaches the requested length;
-- the checkpoint exists and is readable.
+- 初始和最终损失均为有限数值；
+- 固定训练探针的最终损失低于初始损失；
+- 最终验证损失低于初始验证损失；
+- 重新加载检查点后的 logits 与保存前的 logits 匹配，最大绝对误差不超过 `1e-5`；
+- 生成的 token ID 始终在词表范围内，且生成结果达到要求的长度；
+- 检查点存在并可正常读取。
 
-The README will explain that generated prose may remain poor after only 100 steps and that HellaSwag is not meaningful for this tiny model. Loss reduction and checkpoint equivalence are the authoritative smoke-test signals.
+README 将说明：仅训练 100 步后，生成文本的质量可能仍然较差；对于这个微型模型，HellaSwag 也不具备参考意义。损失下降和检查点等价性是此冒烟测试的权威判断信号。
 
-## Error handling
+## 错误处理
 
-The script reports clear errors for a missing `input.txt`, insufficient tokens, an unavailable explicitly requested device, non-finite loss, checkpoint reload mismatch, or failed validation criteria. It does not silently fall back when the user explicitly requests CUDA or MPS.
+当 `input.txt` 缺失、token 数量不足、显式指定的设备不可用、损失不是有限数值、检查点重新加载不一致或未满足验收标准时，脚本会报告清晰的错误。如果用户明确指定 CUDA 或 MPS，脚本不会静默回退到其他设备。
 
-## Verification commands
+## 验证命令
 
-Primary command from the repository root:
+从仓库根目录运行的主要命令：
 
 ```bash
 .venv/bin/python mini_gpt2/train.py
 ```
 
-Fast CPU-compatible diagnostic override:
+兼容 CPU 的快速诊断命令：
 
 ```bash
 .venv/bin/python mini_gpt2/train.py --device cpu --steps 10
 ```
 
-Implementation verification will include syntax compilation, CLI help, a short diagnostic run, and the default smoke test on the best device available to the execution environment.
+实现验证将包括语法编译、CLI 帮助信息检查、短时诊断运行，以及在执行环境中可用的最佳设备上运行默认冒烟测试。
