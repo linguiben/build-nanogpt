@@ -23,6 +23,7 @@ PY
 
 ## 2. 几分钟验证环境和 GPT‑2 基线
 ```bash
+# 评估预训练 GPT‑2 在 HellaSwag 数据集上的表现
 python hellaswag.py -m gpt2 -d mps
 ```
 
@@ -33,6 +34,7 @@ python hellaswag.py -m gpt2 -d mps
 > 4. [Andrej Karpathy讲座：深入探讨ChatGPT类大语言模型](https://www.bilibili.com/video/BV1WnNHeqEFK/?spm_id_from=888.80997.embed_other.whitelist&bvid=BV1WnNHeqEFK&vd_source=4635a9015e41611a3328c0bf4258ebf5)
 > 5. [Karpathy Let's reproduce GPT-2 (124M)](https://www.youtube.com/watch?v=l8pRSuU81PU)
 > 6. [Kaggle Datastes Chinese Population](https://www.kaggle.com/datasets?search=Chinese+Population)
+> 7. [How Large Language Models Work](https://www.marovi.ai/How_Large_Language_Models_Work/zh)
 
 [1]: https://github.com/linguiben/build-nanogpt
 [2]: https://github.com/linguiben/gpt-2/tree/master/src

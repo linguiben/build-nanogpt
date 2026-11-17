@@ -2,6 +2,60 @@
 
 日期：2026-08-15
 
+## 约定
+| 当前符号 | 含义 | 推荐的写法 |
+|---|---|---|
+| `B` | batch size | `B` 或 `batch_size` |
+| `T` | 序列长度 | `T` 或 `seq_len` |
+| `V` | 词表大小 | `V` 或 `vocab_size` |
+| `C` | hidden dimension | `d_model` |
+| `L` | Transformer 层数 | `n_layer` 或 `N_L` |
+| `H` | attention 头数 | `n_head` 或 `N_H` |
+| `D` | 每个 attention head 的维度 | `d_head` |
+
+其中：
+
+$$
+d_{\text{head}} = \frac{d_{\text{model}}}{n_{\text{head}}}
+$$
+
+```mermaid
+flowchart TD
+      X["输入 token ID<br/>x：[4, 64]"]
+      W["Token Embedding 权重 Wte<br/>[50304, 128]"]
+      E["查表得到 token 向量<br/>[4, 64, 128]"]
+      P["Position Embedding 权重 Wpe<br/>[64, 128]"]
+      SUM["相加：token 向量 + 位置向量<br/>[4, 64, 128]"]
+
+      X --> E
+      W --> E
+      P --> SUM
+      E --> SUM
+
+      subgraph BLOCK["Transformer Block：重复 2 层，每层参数独立"]
+          LN1["LayerNorm 1<br/>缩放 γ、偏置 β：各 [128]"]
+          ATT["因果多头自注意力<br/>2 个头，每头 64 维<br/>输入输出：[4, 64, 128]"]
+          ADD1["残差相加"]
+          LN2["LayerNorm 2<br/>缩放 γ、偏置 β：各 [128]"]
+          MLP["MLP<br/>128 → 512 → GELU → 128<br/>输入输出：[4, 64, 128]"]
+          ADD2["残差相加"]
+
+          LN1 --> ATT --> ADD1
+          ADD1 --> LN2 --> MLP --> ADD2
+          LN1 -. "归一化前的输入" .-> ADD1
+          ADD1 -. "跳过 MLP 分支" .-> ADD2
+      end
+
+      SUM --> LN1
+      ADD2 --> FINAL["最终 LayerNorm<br/>[4, 64, 128]"]
+      FINAL --> HEAD["输出头：hidden × Wteᵀ<br/>[4, 64, 128] × [128, 50304]"]
+      W -. "共享同一份权重" .-> HEAD
+      HEAD --> LOGITS["输出 logits<br/>[4, 64, 50304]"]
+
+      LOGITS --> LOSS["训练：与目标 y [4, 64] 比较<br/>交叉熵 → 一个标量 loss"]
+      LOGITS --> GEN["生成：只取最后位置<br/>[4, 50304] → 采样下一个 token"]
+```
+
 ## 目标
 
 在 `mini_gpt2/` 下新增一条独立的小规模 GPT-2 训练路径，用于在约 2–5 分钟内验证完整的本地训练流程。现有项目文件保持不变。

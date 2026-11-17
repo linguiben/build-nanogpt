@@ -1,10 +1,11 @@
 # Mini GPT-2 教学构建目录
+- [How Large Language Models Work](https://www.marovi.ai/How_Large_Language_Models_Work/zh)
 
 ## 当前阶段
 
 本目录用于逐步构建一个约 700 万参数的 GPT-2 风格小模型，以便在本机快速验证训练、评估、检查点和文本生成的完整流程。
 
-**当前仅建立说明性文件骨架，尚不可训练。** `train.py` 中只有文档字符串和结构注释，没有 import、变量、函数、类或训练逻辑。
+`train.py` 已实现完整训练闭环，并保留分节中文讲解和伪代码。默认从随机权重开始，使用仓库根目录的 `input.txt`，训练 100 步。
 
 ## 文件结构
 
@@ -13,19 +14,21 @@ mini_gpt2/
 ├── DESIGN.md          # 完整目标、模型规格、运行流程和验收标准
 ├── SCAFFOLD_PLAN.md   # 本次教学脚手架的执行计划
 ├── README.md          # 目录说明和推荐学习顺序
-├── train.py           # 未来训练脚本的纯注释结构骨架
-└── .gitignore         # 忽略未来生成的输出和 Python 本地缓存
+├── train.py           # 模型、数据、训练、评估、重载和生成；附中文讲解
+├── test_train.py      # 数据对齐、因果性、权重共享与反向传播测试
+└── .gitignore         # 忽略生成的输出和 Python 本地缓存
 ```
 
-未来运行训练后才会生成：
+运行训练后生成：
 
 ```text
 mini_gpt2/out/model.pt
+mini_gpt2/out/metrics.json
 ```
 
-当前不创建空的 `model.pt`，因为检查点必须是训练程序实际写出的、可以重新加载和验证的模型数据。
+`model.pt` 保存模型权重、配置、训练步数和损失；`metrics.json` 记录设备、逐步 loss、前后评估、生成样例和通过状态。重复运行会更新这两个文件。检查点支持推理重载，不包含精确断点续训所需的优化器状态。
 
-## 未来实现顺序
+## 代码阅读顺序
 
 `train.py` 按学习依赖关系分成八个部分：
 
@@ -53,9 +56,9 @@ mini_gpt2/out/model.pt
 
 这些参数用于工程冒烟测试，不用于复现 OpenAI GPT-2 124M 的最终能力。
 
-## 最终实现后的验证信号
+## 验证信号
 
-后续代码完成后，默认运行只有同时满足以下条件才应报告通过：
+默认运行只有同时满足以下条件才报告通过，并返回退出码 0；失败时返回 1：
 
 - 初始和最终损失均为有限数值；
 - 固定训练探针的最终损失低于初始损失；
@@ -66,12 +69,26 @@ mini_gpt2/out/model.pt
 
 仅训练 100 步后的文本可能仍然不连贯，因此损失下降和检查点等价性才是冒烟测试的主要判断依据。HellaSwag 对这个微型短训练模型没有参考意义。
 
-## 当前可执行的检查
+## 运行命令
 
-现在直接运行下列命令只会验证 `train.py` 是合法且无副作用的 Python 文件，不会开始训练：
+从仓库根目录使用 MPS 训练（FP32，默认学习率 `1e-3`）：
 
 ```bash
-.venv/bin/python mini_gpt2/train.py
+.venv/bin/python -u mini_gpt2/train.py --device mps
 ```
 
+若指定的 MPS 不可用，脚本直接报错；使用 `--device auto` 则按 CUDA → MPS → CPU 选择。分词器默认缓存在 `mini_gpt2/out/tokenizer_cache/`（可通过 `TIKTOKEN_CACHE_DIR` 覆盖），首次缺少缓存时可能需要下载，无需下载预训练 GPT-2 权重。生成时仅把 50 个候选的抽样放到 CPU，以使用独立随机数生成器，模型前向与反向仍在所选设备上运行。
+
+可用 `--steps`、`--batch-size`、`--seq-len`（1–64）、`--lr` 调整训练；步骤过少时 loss 下降检查可能不通过。
+
+运行小尺寸 CPU 单元测试：
+
+```bash
+.venv/bin/python -m unittest discover -s mini_gpt2 -p test_train.py -v
+```
+
+## 启动聊天测试
+```bash
+.venv/bin/python mini_gpt2/test_chat.py
+```
 完整设计见 [DESIGN.md](./DESIGN.md)。

@@ -2,7 +2,7 @@
 .DS_Store
 
 # 未来训练产生的检查点和运行输出
-/out/
+out/
 
 # Python 本地缓存
 __pycache__/
